@@ -41,15 +41,19 @@ Instead, `debian-db-share` uses rsync to securely synchronize files via ssh key 
 
 Instead, `debian-db-share` relies on entries created and modified on the primary host by any means.
 Most commonly, these are local users in /etc/{passwd,shadow,group}, managed by the usual `adduser`
-, `deluser`, etc. Since `debian-db-share`
+, `deluser`, etc. `debian-db-share` gets entries using `getent`, so it could really be any other
+backend.
 
-- Configuring [NSS](https://wiki.debian.org/LDAP/NSS#NSS_Setup_with_libnss-ldapd)
-  and [PAM](https://wiki.debian.org/LDAP/PAM) for LDAP is also not trivial
-- Configuring nscd for caching credentials in a reasonable manner for laptops that may remain
+- Configuring [NSS](https://wiki.debian.org/LDAP/NSS#NSS_Setup_with_libnss-ldapd),
+  [PAM](https://wiki.debian.org/LDAP/PAM) and `nslcd` for LDAP is not trivial
+- Configuring `nscd` for caching credentials in a reasonable manner for laptops that may remain
   disconnected for some time is also difficult
 
 Instead, with `debian-db-share`, once the .db files are sync-ed, they become a local source for
-administrative databases. No network latency, no cache issues.
+administrative databases. No network latency at login, no cache issues for disconnected hosts. The
+drawback is that there is a delay in propagating the database files: a locked user on the primary
+host can still access secondary hosts indefinitely on disconnected hosts and for several minutes
+even on connected hosts.
 
 ## Installation
 
