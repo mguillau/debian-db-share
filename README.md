@@ -144,6 +144,8 @@ netgroup:       nis
 The users and groups exported from the primary host are now available on the secondary host and
 refreshed every 5 minutes.
 
+- Optionally, add creation of homedir at first login for users using `sudo pam-auth-update`
+
 Repeat all these steps for every secondary host.
 
 ## Caveats
