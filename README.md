@@ -1,18 +1,18 @@
 # debian-db-share
 
-Simple scripts to export and import administrative datasets as .db files for easy distribution of
+Simple scripts to export and import administrative databases as .db files for easy distribution of
 credentials centralized in a primary host to several secondary hosts.
 
 ## Description
 
 In a situation where you have a small number of hosts that are meant to be used by a small number of
-users, resorting to OpenLDAP for user database sharing is an overkill and adds maintenance work for
-hobby sysadmins.
+users and where you want users to have the same password, UID and GID on all hosts, resorting to
+OpenLDAP for user database sharing is an overkill and adds maintenance work for hobby sysadmins.
 
-The two scripts in this repository provide a simple alternative to centralize (a part of) the
-administrative databases (currenty `passwd`, `shadow` and `group`) on a primary host,
+The two scripts in this repository provide a simple alternative for a centralized setup. It exports
+(a part of) the administrative databases (currenty `passwd`, `shadow` and `group`) of a primary host,
 which are then fetched by secondary hosts. This enables the users of the primary host to also
-gain access to the secondary hosts with the same passwords and other user information.
+gain access to the secondary hosts with the same passwords, UID, GID and other user information.
 
 The high-level setup is the following:
 - User and group data is centralized on a primary host, where users have to do all their info and
@@ -20,28 +20,30 @@ The high-level setup is the following:
   server.
 - On the primary host, the `export_db.sh` script runs every 5 minutes to extract the database
   entries matching a range of UID and GID (by default, 10000-19999). Those entries are stored in
-  `{passwd,shadow,group}.db` files that are compatible with `libnss-db`. Using a UID range prevents
-  from overriding local system user/group information: each host can retain its own local users.
+  `{passwd,shadow,group}.db` files that are compatible with `libnss-db`. Exporting only a UID/GID
+  range prevents from exporting local system user/group information. Each host can retain
+  its own local users (which may vary from one host to the next based on the distribution, the
+  installed packages, etc.).
 - On any secondary host, the `import_db.sh` script runs every 5 minutes to securely fetch (via
   `rsync`) the resulting .db files from the primary host, storing them where `libnss-db` expects
-  them.
+  them. Using .db files and `libnss-db` helps avoid having to tamper with the local databases 
+  `/etc/{passwd,shadow,group}`.
 - If the secondary host is properly configured for accepting entries from `libnss-db`, the users of
-  the primary host now also have access to the secondary host as local users.
+  the primary host now also have access to the secondary host as local users with.
 
-## Quick comparison with OpenLDAP
+## Quick comparison with the OpenLDAP solution
 
-Why resorting to `OpenLDAP` didn't work for me:
+Why resorting to `OpenLDAP` didn't really work for me:
 
-- `OpenLDAP` needs extra open ports
-- Its configuration for a secure usage via StartTLS is difficult
+- `OpenLDAP` needs extra open ports, and its configuration for a secure usage via StartTLS is difficult
 
 Instead, `debian-db-share` uses rsync to securely synchronize files via ssh key pairs.
 
-- The formatting of entries for ldap{add,modify,...} is very unnatural
+- The formatting of entries for ldap{add,modify,...} is powerful but very unnatural
 
-Instead, `debian-db-share` relies on entries created and modified on the primary host by any means.
+Instead, `debian-db-share` relies on regular database entries created and modified on the primary host.
 Most commonly, these are local users in /etc/{passwd,shadow,group}, managed by the usual `adduser`
-, `deluser`, etc. `debian-db-share` gets entries using `getent`, so it could really be any other
+, `deluser`, etc. `debian-db-share` gets entry data using `getent`, so it could really be any other
 backend.
 
 - Configuring [NSS](https://wiki.debian.org/LDAP/NSS#NSS_Setup_with_libnss-ldapd),
