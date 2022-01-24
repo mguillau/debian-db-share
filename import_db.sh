@@ -28,6 +28,8 @@ LOCAL_PRIVATE_SSH_KEY="/root/.ssh/id_rsa_dbshare"  # Location of the private key
 #DBS="passwd group ethers protocols rpc services shadow netgroup"
 DBS="passwd group shadow"
 
+set -euo pipefail
+
 # Directory where the databases should be exported for libnss-db
 IMPORT_DBDIR=$(awk \
   'BEGIN { FS="=" }; {gsub(/ /,"");} /^VAR_DB=/ {print $2;}' \
@@ -38,21 +40,44 @@ MAKEDB="makedb --quiet"
 
 # Sync data from primary host to a tempdir
 TEMPDIR=$(mktemp -d)
-rsync -qtL --chmod 0640 --chown root:root \
-   -e "ssh -i ${LOCAL_PRIVATE_SSH_KEY}" \
-   ${EXPORT_USER}@${PRIMARY_HOST}:${EXPORT_DBDIR}/*.db $TEMPDIR/
+trap "rm -rf '${TEMPDIR}'" EXIT
 
-if [[ $? != 0 ]]; then
-  echo "No network? Skipping"
-  rm -rf "$TEMPDIR"
-  exit 0
-fi
+# Ref: https://stackoverflow.com/questions/20140743/using-file-locks-with-rsync
+function rsync_wrap() {
+  # Get shared lock for the duration of rsync
+  LOCK="${EXPORT_DBDIR}/lock"
+  exec {fd}< "${LOCK}"
+  flock -w 3 -s ${fd} || {
+    echo "rsync error 117: failed to lock ${EXPORT_DBDIR}" 1>&2
+    return 117
+  }
+  # Call real rsync with original arguments
+  rsync "$@"
+  # Note, return is important, do not let it fall out
+  return $?
+}
+
+# Build remote command, define vars and functions inside the command
+remote_cmd="
+  $( declare -p EXPORT_DBDIR )
+  $( declare -f rsync_wrap )
+
+  rsync_wrap "
+
+# handle network timeouts in SSH, not in rsync,
+# because rsync does not know that waiting for lock is expected
+rsync \
+  -qtL --chmod 0640 --chown root:root \
+  --rsync-path="${remote_cmd}" \
+  -e "ssh -o BatchMode=yes -o ServerAliveCountMax=3 -o ServerAliveInterval=30 -i '${LOCAL_PRIVATE_SSH_KEY}'" \
+  "${EXPORT_USER}"@"${PRIMARY_HOST}":"${EXPORT_DBDIR}/*.db" "${TEMPDIR}/"
+
 
 # Process databases to sync
 for db in $DBS; do
-  DB="$TEMPDIR/${db}.db"
+  DB="${TEMPDIR}/${db}.db"
   if [ -f "$DB" ]; then
-    if [[ $db == "shadow" ]]; then
+    if [[ "$db" == "shadow" ]]; then
       chgrp shadow "$DB";
     else
       chmod a+r "$DB";
@@ -63,5 +88,3 @@ for db in $DBS; do
     echo "Skipping ${db}: was it exported?"
   fi
 done
-
-rm -rf "$TEMPDIR"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Extract administrative databases into .db files for libnss-db
-
+#
 # Installation on primary host
 # ----------------------------
 # 1- Create a user just for running this script, such as `dbshare`.
@@ -22,9 +22,17 @@ GROUP_REGEXP="^[^:]*:[*x]:1[0-9][0-9][0-9][0-9]:"
 # Directory where the databases are exported
 EXPORT_DBDIR="${HOME}/dbexport"
 
+#
+set -euxo pipefail
+
 # Ensure private output
 mkdir -p "${EXPORT_DBDIR}"
 chmod 0700 "${EXPORT_DBDIR}"
+
+# Get exclusive lock until the end of the script. Wait up to 3 minutes
+LOCK="${EXPORT_DBDIR}/lock"
+exec {fd}> "${LOCK}"
+flock -w 180 -x ${fd} || exit 1
 
 # Programs used
 MAKEDB="makedb --quiet"

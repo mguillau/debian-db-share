@@ -30,6 +30,9 @@ The high-level setup is the following:
   `/etc/{passwd,shadow,group}`.
 - If the secondary host is properly configured for accepting entries from `libnss-db`, the users of
   the primary host now also have access to the secondary host as local users with.
+- A simple locking mechanism prevents corrupted states: `export_db.sh` waits up to 3 minutes to
+  obtain the exclusivity of the lock, while `import_db.sh` uses a wrapper over rsync such that
+  it waits 1s to obtain a shared lock, or will fail with error 117.
 
 ## Quick comparison with the OpenLDAP solution
 
